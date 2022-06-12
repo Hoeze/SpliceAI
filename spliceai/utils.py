@@ -20,9 +20,9 @@ class Annotator:
             self.genes = df['#NAME'].to_numpy()
             self.chroms = df['CHROM'].to_numpy()
             self.strands = df['STRAND'].to_numpy()
-            self.tx_starts = df['TX_START'].to_numpy()+1
+            self.tx_starts = df['TX_START'].to_numpy() + 1
             self.tx_ends = df['TX_END'].to_numpy()
-            self.exon_starts = [np.asarray([int(i) for i in c.split(',') if i])+1
+            self.exon_starts = [np.asarray([int(i) for i in c.split(',') if i]) + 1
                                 for c in df['EXON_START'].to_numpy()]
             self.exon_ends = [np.asarray([int(i) for i in c.split(',') if i])
                               for c in df['EXON_END'].to_numpy()]
@@ -47,7 +47,7 @@ class Annotator:
         chrom = normalise_chrom(chrom, list(self.chroms)[0])
         idxs = np.intersect1d(np.nonzero(self.chroms == chrom)[0],
                               np.intersect1d(np.nonzero(self.tx_starts <= pos)[0],
-                              np.nonzero(pos <= self.tx_ends)[0]))
+                                             np.nonzero(pos <= self.tx_ends)[0]))
 
         if len(idxs) >= 1:
             return self.genes[idxs], self.strands[idxs], idxs
@@ -56,16 +56,15 @@ class Annotator:
 
     def get_pos_data(self, idx, pos):
 
-        dist_tx_start = self.tx_starts[idx]-pos
-        dist_tx_end = self.tx_ends[idx]-pos
-        dist_exon_bdry = min(np.union1d(self.exon_starts[idx], self.exon_ends[idx])-pos, key=abs)
+        dist_tx_start = self.tx_starts[idx] - pos
+        dist_tx_end = self.tx_ends[idx] - pos
+        dist_exon_bdry = min(np.union1d(self.exon_starts[idx], self.exon_ends[idx]) - pos, key=abs)
         dist_ann = (dist_tx_start, dist_tx_end, dist_exon_bdry)
 
         return dist_ann
 
 
 def one_hot_encode(seq):
-
     map = np.asarray([[0, 0, 0, 0],
                       [1, 0, 0, 0],
                       [0, 1, 0, 0],
@@ -79,22 +78,20 @@ def one_hot_encode(seq):
 
 
 def normalise_chrom(source, target):
-
     def has_prefix(x):
         return x.startswith('chr')
 
     if has_prefix(source) and not has_prefix(target):
         return source.strip('chr')
     elif not has_prefix(source) and has_prefix(target):
-        return 'chr'+source
+        return 'chr' + source
 
     return source
 
 
 def get_delta_scores(record, ann, dist_var, mask):
-
-    cov = 2*dist_var+1
-    wid = 10000+cov
+    cov = 2 * dist_var + 1
+    wid = 10000 + cov
     delta_scores = []
 
     try:
@@ -109,12 +106,12 @@ def get_delta_scores(record, ann, dist_var, mask):
 
     chrom = normalise_chrom(record.chrom, list(ann.ref_fasta.keys())[0])
     try:
-        seq = ann.ref_fasta[chrom][record.pos-wid//2-1:record.pos+wid//2].seq
+        seq = ann.ref_fasta[chrom][record.pos - wid // 2 - 1:record.pos + wid // 2].seq
     except (IndexError, ValueError):
         logging.warning('Skipping record (fasta issue): {}'.format(record))
         return delta_scores
 
-    if seq[wid//2:wid//2+len(record.ref)].upper() != record.ref:
+    if seq[wid // 2:wid // 2 + len(record.ref)].upper() != record.ref:
         logging.warning('Skipping record (ref issue): {}'.format(record))
         return delta_scores
 
@@ -122,7 +119,7 @@ def get_delta_scores(record, ann, dist_var, mask):
         logging.warning('Skipping record (near chromosome end): {}'.format(record))
         return delta_scores
 
-    if len(record.ref) > 2*dist_var:
+    if len(record.ref) > 2 * dist_var:
         logging.warning('Skipping record (ref too long): {}'.format(record))
         return delta_scores
 
@@ -139,65 +136,64 @@ def get_delta_scores(record, ann, dist_var, mask):
                 delta_scores.append("{}|{}|.|.|.|.|.|.|.|.".format(record.alts[j], genes[i]))
                 continue
 
-            dist_ann = ann.get_pos_data(idxs[i], record.pos)
-            pad_size = [max(wid//2+dist_ann[0], 0), max(wid//2-dist_ann[1], 0)]
+            dist_ann = ann.get_pos_data(idxs[i], record.pos) # dist_tx_start, dist_tx_end, dist_exon_bdry
+            pad_size = [max(wid // 2 + dist_ann[0], 0), max(wid // 2 - dist_ann[1], 0)]
             ref_len = len(record.ref)
             alt_len = len(record.alts[j])
-            del_len = max(ref_len-alt_len, 0)
+            del_len = max(ref_len - alt_len, 0)
 
-            x_ref = 'N'*pad_size[0]+seq[pad_size[0]:wid-pad_size[1]]+'N'*pad_size[1]
-            x_alt = x_ref[:wid//2]+str(record.alts[j])+x_ref[wid//2+ref_len:]
+            x_ref = 'N' * pad_size[0] + seq[pad_size[0]:wid - pad_size[1]] + 'N' * pad_size[1]
+            x_alt = x_ref[:wid // 2] + str(record.alts[j]) + x_ref[wid // 2 + ref_len:]
 
             x_ref = one_hot_encode(x_ref)[None, :]
             x_alt = one_hot_encode(x_alt)[None, :]
 
-            if strands[i] == '-':
+            if strands[i] == '-': # reverse-complement the sequence
                 x_ref = x_ref[:, ::-1, ::-1]
                 x_alt = x_alt[:, ::-1, ::-1]
 
             y_ref = np.mean([ann.models[m].predict(x_ref) for m in range(5)], axis=0)
             y_alt = np.mean([ann.models[m].predict(x_alt) for m in range(5)], axis=0)
 
-            if strands[i] == '-':
+            if strands[i] == '-': # reverse the output to match start-end instead of end-start
                 y_ref = y_ref[:, ::-1]
                 y_alt = y_alt[:, ::-1]
 
-            if ref_len > 1 and alt_len == 1:
+            if ref_len > 1 and alt_len == 1: # deletion
                 y_alt = np.concatenate([
-                    y_alt[:, :cov//2+alt_len],
+                    y_alt[:, :cov // 2 + alt_len],
                     np.zeros((1, del_len, 3)),
-                    y_alt[:, cov//2+alt_len:]],
+                    y_alt[:, cov // 2 + alt_len:]],
                     axis=1)
-            elif ref_len == 1 and alt_len > 1:
+            elif ref_len == 1 and alt_len > 1: # insertion
                 y_alt = np.concatenate([
-                    y_alt[:, :cov//2],
-                    np.max(y_alt[:, cov//2:cov//2+alt_len], axis=1)[:, None, :],
-                    y_alt[:, cov//2+alt_len:]],
+                    y_alt[:, :cov // 2],
+                    np.max(y_alt[:, cov // 2:cov // 2 + alt_len], axis=1)[:, None, :],
+                    y_alt[:, cov // 2 + alt_len:]],
                     axis=1)
 
             y = np.concatenate([y_ref, y_alt])
 
-            idx_pa = (y[1, :, 1]-y[0, :, 1]).argmax()
-            idx_na = (y[0, :, 1]-y[1, :, 1]).argmax()
-            idx_pd = (y[1, :, 2]-y[0, :, 2]).argmax()
-            idx_nd = (y[0, :, 2]-y[1, :, 2]).argmax()
+            idx_pa = (y[1, :, 1] - y[0, :, 1]).argmax() # alt - ref
+            idx_na = (y[0, :, 1] - y[1, :, 1]).argmax() # ref - alt
+            idx_pd = (y[1, :, 2] - y[0, :, 2]).argmax() # alt - ref
+            idx_nd = (y[0, :, 2] - y[1, :, 2]).argmax() # ref - alt
 
-            mask_pa = np.logical_and((idx_pa-cov//2 == dist_ann[2]), mask)
-            mask_na = np.logical_and((idx_na-cov//2 != dist_ann[2]), mask)
-            mask_pd = np.logical_and((idx_pd-cov//2 == dist_ann[2]), mask)
-            mask_nd = np.logical_and((idx_nd-cov//2 != dist_ann[2]), mask)
+            mask_pa = np.logical_and((idx_pa - cov // 2 == dist_ann[2]), mask)
+            mask_na = np.logical_and((idx_na - cov // 2 != dist_ann[2]), mask)
+            mask_pd = np.logical_and((idx_pd - cov // 2 == dist_ann[2]), mask)
+            mask_nd = np.logical_and((idx_nd - cov // 2 != dist_ann[2]), mask)
 
             delta_scores.append("{}|{}|{:.2f}|{:.2f}|{:.2f}|{:.2f}|{}|{}|{}|{}".format(
-                                record.alts[j],
-                                genes[i],
-                                (y[1, idx_pa, 1]-y[0, idx_pa, 1])*(1-mask_pa),
-                                (y[0, idx_na, 1]-y[1, idx_na, 1])*(1-mask_na),
-                                (y[1, idx_pd, 2]-y[0, idx_pd, 2])*(1-mask_pd),
-                                (y[0, idx_nd, 2]-y[1, idx_nd, 2])*(1-mask_nd),
-                                idx_pa-cov//2,
-                                idx_na-cov//2,
-                                idx_pd-cov//2,
-                                idx_nd-cov//2))
+                record.alts[j],
+                genes[i],
+                (y[1, idx_pa, 1] - y[0, idx_pa, 1]) * (1 - mask_pa),
+                (y[0, idx_na, 1] - y[1, idx_na, 1]) * (1 - mask_na),
+                (y[1, idx_pd, 2] - y[0, idx_pd, 2]) * (1 - mask_pd),
+                (y[0, idx_nd, 2] - y[1, idx_nd, 2]) * (1 - mask_nd),
+                idx_pa - cov // 2,
+                idx_na - cov // 2,
+                idx_pd - cov // 2,
+                idx_nd - cov // 2))
 
     return delta_scores
-
