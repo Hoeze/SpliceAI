@@ -151,8 +151,8 @@ def get_delta_scores(record, ann, dist_var, mask):
                 x_ref = x_ref[:, ::-1, ::-1]
                 x_alt = x_alt[:, ::-1, ::-1]
 
-            y_ref = np.mean([ann.models[m].predict(x_ref) for m in range(5)], axis=0)
-            y_alt = np.mean([ann.models[m].predict(x_alt) for m in range(5)], axis=0)
+            y_ref = np.mean([ann.models[m](x_ref) for m in range(5)], axis=0)
+            y_alt = np.mean([ann.models[m](x_alt) for m in range(5)], axis=0)
 
             if strands[i] == '-':
                 y_ref = y_ref[:, ::-1]
