@@ -158,19 +158,21 @@ def get_delta_scores(record, ann, dist_var, mask):
                 y_ref = y_ref[:, ::-1]
                 y_alt = y_alt[:, ::-1]
 
-            if ref_len > 1 and alt_len == 1:
+            # deletions
+            if ref_len > 1 and (alt_len < ref_len):
                 y_alt = np.concatenate([
                     y_alt[:, :cov//2+alt_len],
                     np.zeros((1, del_len, 3)),
                     y_alt[:, cov//2+alt_len:]],
                     axis=1)
+            # insertions
             elif ref_len == 1 and alt_len > 1:
                 y_alt = np.concatenate([
                     y_alt[:, :cov//2],
                     np.max(y_alt[:, cov//2:cov//2+alt_len], axis=1)[:, None, :],
                     y_alt[:, cov//2+alt_len:]],
                     axis=1)
-            #MNP handling
+            # MNP handling
             elif ref_len > 1 and alt_len > 1:
                 zblock = np.zeros((1,ref_len-1,3))
                 y_alt = np.concatenate([
