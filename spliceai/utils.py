@@ -141,11 +141,19 @@ def get_delta_scores(record, ann, dist_var, mask):
             alt_len = len(record.alts[j])
             del_len = max(ref_len-alt_len, 0)
 
-            x_ref = 'N'*pad_size[0]+seq[pad_size[0]:wid-pad_size[1]]+'N'*pad_size[1]
-            x_alt = x_ref[:wid//2]+str(record.alts[j])+x_ref[wid//2+ref_len:]
+            x_ref_s = (
+                'N' * pad_size[0]
+                + seq[pad_size[0]:wid-pad_size[1]]
+                + 'N' * pad_size[1]
+            )
+            x_alt_s = (
+                x_ref_s[:wid//2]
+                + str(record.alts[j])
+                + x_ref_s[wid//2+ref_len:]
+            )
 
-            x_ref = one_hot_encode(x_ref)[None, :]
-            x_alt = one_hot_encode(x_alt)[None, :]
+            x_ref = one_hot_encode(x_ref_s)[None, :]
+            x_alt = one_hot_encode(x_alt_s)[None, :]
 
             if strands[i] == '-':
                 x_ref = x_ref[:, ::-1, ::-1]
@@ -162,25 +170,19 @@ def get_delta_scores(record, ann, dist_var, mask):
             if ref_len > 1 and (alt_len < ref_len):
                 y_alt = np.concatenate([
                     y_alt[:, :cov//2+alt_len],
+                    # insert zeros for missing bases
                     np.zeros((1, del_len, 3)),
-                    y_alt[:, cov//2+alt_len:]],
-                    axis=1)
+                    y_alt[:, cov//2+alt_len:]
+                ], axis=1)
             # insertions
-            elif ref_len == 1 and alt_len > 1:
+            elif (ref_len < alt_len) and alt_len > 1:
                 y_alt = np.concatenate([
-                    y_alt[:, :cov//2],
-                    np.max(y_alt[:, cov//2:cov//2+alt_len], axis=1)[:, None, :],
-                    y_alt[:, cov//2+alt_len:]],
-                    axis=1)
-            # MNP handling
-            elif ref_len > 1 and alt_len > 1:
-                zblock = np.zeros((1,ref_len-1,3))
-                y_alt = np.concatenate([
-                    y_alt[:, :cov//2],
-                    np.max(y_alt[:, cov//2:cov//2+alt_len], axis=1)[:, None, :],
-                    zblock,
-                    y_alt[:, cov//2+alt_len:]],
-                    axis=1)
+                    # keep alt sequence until end of (modified) reference
+                    y_alt[:, :cov//2 + (ref_len - 1)],
+                    # max-aggregate across additionally inserted bases
+                    np.max(y_alt[:, cov//2 + (ref_len -1):cov//2+alt_len], axis=1)[:, None, :],
+                    y_alt[:, cov//2+alt_len:]
+                ], axis=1)
 
             y = np.concatenate([y_ref, y_alt])
 
