@@ -1,4 +1,4 @@
-from pkg_resources import resource_filename
+from importlib.resources import files
 import pandas as pd
 import numpy as np
 from pyfaidx import Fasta
@@ -11,9 +11,9 @@ class Annotator:
     def __init__(self, ref_fasta, annotations):
 
         if annotations == 'grch37':
-            annotations = resource_filename(__name__, 'annotations/grch37.txt')
+            annotations = str(files(__package__) / 'annotations' / 'grch37.txt')
         elif annotations == 'grch38':
-            annotations = resource_filename(__name__, 'annotations/grch38.txt')
+            annotations = str(files(__package__) / 'annotations' / 'grch38.txt')
 
         try:
             df = pd.read_csv(annotations, sep='\t', dtype={'CHROM': object})
@@ -39,8 +39,8 @@ class Annotator:
             logging.error('{}'.format(e))
             exit()
 
-        paths = ('models/spliceai{}.h5'.format(x) for x in range(1, 6))
-        self.models = [load_model(resource_filename(__name__, x)) for x in paths]
+        paths = (files(__package__) / 'models' / 'spliceai{}.h5'.format(x) for x in range(1, 6))
+        self.models = [load_model(str(x)) for x in paths]
 
     def get_name_and_strand(self, chrom, pos):
 
@@ -75,7 +75,7 @@ def one_hot_encode(seq):
     seq = seq.upper().replace('A', '\x01').replace('C', '\x02')
     seq = seq.replace('G', '\x03').replace('T', '\x04').replace('N', '\x00')
 
-    return map[np.fromstring(seq, np.int8) % 5]
+    return map[np.frombuffer(seq.encode(), np.int8) % 5]
 
 
 def normalise_chrom(source, target):
